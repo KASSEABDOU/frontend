@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "buildCommand": "npm run build --configuration production",
+  "outputDirectory": "dist/daara-frontend/browser",
+  "framework": "angular",
+  "installCommand": "npm install"
+}
