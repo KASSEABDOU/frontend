@@ -1,5 +1,4 @@
-// ============================================
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, computed, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
@@ -20,8 +19,8 @@ import { TalibeService } from '../../shared/services/talibe';
 import { EnseignantService } from '../../shared/services/enseignant';
 import { BatimentService } from '../../shared/services/batiment';
 import { Daara, Talibe, Enseignant, Batiment } from '../../core/models/user.model';
-import { MatProgressBarModule } from '@angular/material/progress-bar'; 
-import { forkJoin } from 'rxjs';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { Subject, takeUntil, forkJoin } from 'rxjs';
 
 @Component({
   selector: 'app-daara-details',
@@ -43,9 +42,10 @@ import { forkJoin } from 'rxjs';
     LayoutComponent,
     MatProgressBarModule
   ],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-layout>
-      <div class="details-container" *ngIf="!loading && daara">
+      <div class="details-container" *ngIf="!loading() && daara() as daara">
         <!-- En-tête -->
         <mat-card class="header-card">
           <div class="header-content">
@@ -74,19 +74,19 @@ import { forkJoin } from 'rxjs';
               <div class="quick-stats">
                 <div class="stat">
                   <mat-icon>school</mat-icon>
-                  <span>{{daara.nombre_talibes}} talibés</span>
+                  <span>{{talibes().length}} talibés</span>
                 </div>
                 <div class="stat">
                   <mat-icon>person</mat-icon>
-                  <span>{{daara.nombre_enseignants}} enseignants</span>
+                  <span>{{enseignants().length}} enseignants</span>
                 </div>
                 <div class="stat">
                   <mat-icon>apartment</mat-icon>
-                  <span>{{daara.nombre_batiments}} bâtiments</span>
+                  <span>{{batiments().length}} bâtiments</span>
                 </div>
                 <div class="stat">
                   <mat-icon>calculate</mat-icon>
-                  <span>Ratio: {{getRatio()}} : 1</span>
+                  <span>Ratio: {{ratio()}} : 1</span>
                 </div>
               </div>
 
@@ -118,11 +118,11 @@ import { forkJoin } from 'rxjs';
             <mat-card-content>
               <mat-icon>school</mat-icon>
               <div class="stat-info">
-                <h2>{{talibes.length}}</h2>
+                <h2>{{talibes().length}}</h2>
                 <p>Talibés inscrits</p>
-                <mat-progress-bar mode="determinate" [value]="getCapacityPercentage()" 
-                                  color="warn"></mat-progress-bar>
-                <small>{{getCapacityPercentage()}}% de capacité</small>
+                <mat-progress-bar mode="determinate" [value]="capacityPercentage()" 
+                                  [color]="capacityColor()"></mat-progress-bar>
+                <small>{{capacityPercentage()}}% de capacité</small>
               </div>
             </mat-card-content>
           </mat-card>
@@ -131,10 +131,10 @@ import { forkJoin } from 'rxjs';
             <mat-card-content>
               <mat-icon>person</mat-icon>
               <div class="stat-info">
-                <h2>{{enseignants.length}}</h2>
+                <h2>{{enseignants().length}}</h2>
                 <p>Enseignants actifs</p>
                 <mat-chip-set>
-                  <mat-chip>{{getSpecialitiesCount()}} spécialités</mat-chip>
+                  <mat-chip>{{specialitiesCount()}} spécialités</mat-chip>
                 </mat-chip-set>
               </div>
             </mat-card-content>
@@ -144,10 +144,10 @@ import { forkJoin } from 'rxjs';
             <mat-card-content>
               <mat-icon>apartment</mat-icon>
               <div class="stat-info">
-                <h2>{{batiments.length}}</h2>
+                <h2>{{batiments().length}}</h2>
                 <p>Bâtiments</p>
                 <mat-chip-set>
-                  <mat-chip>{{getTotalChambres()}} chambres</mat-chip>
+                  <mat-chip>{{totalChambres()}} chambres</mat-chip>
                 </mat-chip-set>
               </div>
             </mat-card-content>
@@ -157,11 +157,11 @@ import { forkJoin } from 'rxjs';
             <mat-card-content>
               <mat-icon>trending_up</mat-icon>
               <div class="stat-info">
-                <h2>{{getRatio()}}</h2>
+                <h2>{{ratio()}}</h2>
                 <p>Ratio T/E</p>
                 <mat-chip-set>
-                  <mat-chip [color]="getRatio() > 15 ? 'warn' : 'primary'">
-                    {{getRatio() > 15 ? 'Élevé' : 'Optimal'}}
+                  <mat-chip [color]="ratio() > 15 ? 'warn' : 'primary'">
+                    {{ratio() > 15 ? 'Élevé' : 'Optimal'}}
                   </mat-chip>
                 </mat-chip-set>
               </div>
@@ -186,7 +186,7 @@ import { forkJoin } from 'rxjs';
                   <mat-card-content>
                     <div class="chart-wrapper">
                       <canvas baseChart
-                        [data]="pieChartData"
+                        [data]="pieChartData()"
                         [type]="'pie'"
                         [options]="pieChartOptions">
                       </canvas>
@@ -218,7 +218,7 @@ import { forkJoin } from 'rxjs';
                       </div>
                       <div class="info-item">
                         <span class="label">Capacité totale:</span>
-                        <span class="value">~{{getCapacity()}} personnes</span>
+                        <span class="value">~{{capacity()}} personnes</span>
                       </div>
                     </div>
                   </mat-card-content>
@@ -234,7 +234,7 @@ import { forkJoin } from 'rxjs';
                 <mat-card-header>
                   <mat-card-title>
                     <mat-icon>school</mat-icon>
-                    Liste des talibés ({{talibes.length}})
+                    Liste des talibés ({{talibes().length}})
                   </mat-card-title>
                   <button mat-raised-button color="primary" routerLink="/talibes/create">
                     <mat-icon>add</mat-icon>
@@ -242,7 +242,7 @@ import { forkJoin } from 'rxjs';
                   </button>
                 </mat-card-header>
                 <mat-card-content>
-                  <table mat-table [dataSource]="talibes" *ngIf="talibes.length > 0">
+                  <table mat-table [dataSource]="talibes()" *ngIf="talibes().length > 0">
                     <ng-container matColumnDef="matricule">
                       <th mat-header-cell *matHeaderCellDef>Matricule</th>
                       <td mat-cell *matCellDef="let talibe">{{talibe.matricule}}</td>
@@ -278,7 +278,7 @@ import { forkJoin } from 'rxjs';
                     <tr mat-row *matRowDef="let row; columns: talibesColumns;"></tr>
                   </table>
 
-                  <div class="no-data" *ngIf="talibes.length === 0">
+                  <div class="no-data" *ngIf="talibes().length === 0">
                     <mat-icon>person_off</mat-icon>
                     <p>Aucun talibé inscrit</p>
                   </div>
@@ -294,7 +294,7 @@ import { forkJoin } from 'rxjs';
                 <mat-card-header>
                   <mat-card-title>
                     <mat-icon>person</mat-icon>
-                    Corps enseignant ({{enseignants.length}})
+                    Corps enseignant ({{enseignants().length}})
                   </mat-card-title>
                   <button mat-raised-button color="primary" routerLink="/enseignants/create">
                     <mat-icon>add</mat-icon>
@@ -302,8 +302,8 @@ import { forkJoin } from 'rxjs';
                   </button>
                 </mat-card-header>
                 <mat-card-content>
-                  <div class="enseignants-grid" *ngIf="enseignants.length > 0">
-                    <mat-card *ngFor="let enseignant of enseignants" class="enseignant-card">
+                  <div class="enseignants-grid" *ngIf="enseignants().length > 0">
+                    <mat-card *ngFor="let enseignant of enseignants()" class="enseignant-card">
                       <mat-card-content>
                         <div class="enseignant-header">
                           <mat-icon>person</mat-icon>
@@ -325,7 +325,7 @@ import { forkJoin } from 'rxjs';
                     </mat-card>
                   </div>
 
-                  <div class="no-data" *ngIf="enseignants.length === 0">
+                  <div class="no-data" *ngIf="enseignants().length === 0">
                     <mat-icon>person_off</mat-icon>
                     <p>Aucun enseignant assigné</p>
                   </div>
@@ -341,7 +341,7 @@ import { forkJoin } from 'rxjs';
                 <mat-card-header>
                   <mat-card-title>
                     <mat-icon>apartment</mat-icon>
-                    Bâtiments ({{batiments.length}})
+                    Bâtiments ({{batiments().length}})
                   </mat-card-title>
                   <button mat-raised-button color="primary" routerLink="/batiments/create">
                     <mat-icon>add</mat-icon>
@@ -349,8 +349,8 @@ import { forkJoin } from 'rxjs';
                   </button>
                 </mat-card-header>
                 <mat-card-content>
-                  <mat-accordion *ngIf="batiments.length > 0">
-                    <mat-expansion-panel *ngFor="let batiment of batiments">
+                  <mat-accordion *ngIf="batiments().length > 0">
+                    <mat-expansion-panel *ngFor="let batiment of batiments()">
                       <mat-expansion-panel-header>
                         <mat-panel-title>
                           <mat-icon>apartment</mat-icon>
@@ -371,7 +371,7 @@ import { forkJoin } from 'rxjs';
                     </mat-expansion-panel>
                   </mat-accordion>
 
-                  <div class="no-data" *ngIf="batiments.length === 0">
+                  <div class="no-data" *ngIf="batiments().length === 0">
                     <mat-icon>apartment_off</mat-icon>
                     <p>Aucun bâtiment enregistré</p>
                   </div>
@@ -382,7 +382,7 @@ import { forkJoin } from 'rxjs';
         </mat-tab-group>
       </div>
 
-      <div class="loading-container" *ngIf="loading">
+      <div class="loading-container" *ngIf="loading()">
         <mat-spinner diameter="50"></mat-spinner>
         <p>Chargement des détails...</p>
       </div>
@@ -731,7 +731,7 @@ import { forkJoin } from 'rxjs';
     }
   `]
 })
-export class DaaraDetailsComponent implements OnInit {
+export class DaaraDetailsComponent implements OnInit, OnDestroy {
   private daaraService = inject(DaaraService);
   private talibeService = inject(TalibeService);
   private enseignantService = inject(EnseignantService);
@@ -739,17 +739,54 @@ export class DaaraDetailsComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
+  private destroy$ = new Subject<void>();
 
-  daara: Daara | null = null;
-  talibes: Talibe[] = [];
-  enseignants: Enseignant[] = [];
-  batiments: Batiment[] = [];
-  loading = true;
+  // Utilisation de signaux pour une réactivité optimisée
+  daara = signal<Daara | null>(null);
+  talibes = signal<Talibe[]>([]);
+  enseignants = signal<Enseignant[]>([]);
+  batiments = signal<Batiment[]>([]);
+  loading = signal(true);
   
   talibesColumns = ['matricule', 'nom', 'niveau', 'actions'];
 
+  // Propriétés calculées avec signaux
+  ratio = computed(() => {
+    const enseignantsCount = this.enseignants().length;
+    const talibesCount = this.talibes().length;
+    return enseignantsCount > 0 ? Math.round(talibesCount / enseignantsCount) : 0;
+  });
+
+  capacity = computed(() => {
+    return Math.round((this.talibes().length + this.enseignants().length) * 1.2);
+  });
+
+  capacityPercentage = computed(() => {
+    const cap = this.capacity();
+    return Math.min(Math.round((this.talibes().length / cap) * 100), 100);
+  });
+
+  capacityColor = computed(() => {
+    const percentage = this.capacityPercentage();
+    if (percentage >= 90) return 'warn';
+    if (percentage >= 70) return 'accent';
+    return 'primary';
+  });
+
+  specialitiesCount = computed(() => {
+    const specialities = new Set(
+      this.enseignants()
+        .map(e => e.specialite)
+        .filter(Boolean)
+    );
+    return specialities.size;
+  });
+
+  totalChambres = computed(() => {
+    return this.batiments().reduce((sum, b) => sum + b.nombre_chambres, 0);
+  });
+
   // Chart.js configuration
-  pieChartData: any;
   pieChartOptions: ChartConfiguration['options'] = {
     responsive: true,
     maintainAspectRatio: false,
@@ -758,89 +795,104 @@ export class DaaraDetailsComponent implements OnInit {
     }
   };
 
+  pieChartData = computed(() => {
+    return {
+      labels: ['Talibés', 'Enseignants', 'Bâtiments'],
+      datasets: [{
+        data: [this.talibes().length, this.enseignants().length, this.batiments().length],
+        backgroundColor: ['#f093fb', '#4facfe', '#43e97b']
+      }]
+    };
+  });
+
   ngOnInit(): void {
-    this.route.params.subscribe(params => {
-      const id = +params['id'];
-      this.loadDaaraDetails(id);
-    });
+    this.route.params
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(params => {
+        const id = +params['id'];
+        this.loadDaaraDetails(id);
+      });
   }
 
   loadDaaraDetails(id: number): void {
+    this.loading.set(true);
+
     forkJoin({
       daara: this.daaraService.getById(id),
       talibes: this.daaraService.getTalibes(id),
       enseignants: this.daaraService.getEnseignants(id),
       batiments: this.batimentService.getAll()
-    }).subscribe({
-      next: (data) => {
-        this.daara = data.daara;
-        this.talibes = data.talibes;
-        this.enseignants = data.enseignants;
-        this.batiments = data.batiments.filter(b => b.daara_id === id);
-        
-        this.initChart();
-        this.loading = false;
-      },
-      error: () => {
-        this.snackBar.open('Erreur de chargement', 'Fermer', { duration: 3000 });
-        this.router.navigate(['/daaras']);
-      }
-    });
-  }
-
-  initChart(): void {
-    this.pieChartData = {
-      labels: ['Talibés', 'Enseignants', 'Bâtiments'],
-      datasets: [{
-        data: [this.talibes.length, this.enseignants.length, this.batiments.length],
-        backgroundColor: ['#f093fb', '#4facfe', '#43e97b']
-      }]
-    };
-  }
-
-  getRatio(): number {
-    if (this.enseignants.length === 0) return 0;
-    return Math.round(this.talibes.length / this.enseignants.length);
-  }
-
-  getCapacity(): number {
-    return (this.talibes.length + this.enseignants.length) * 1.2; // Estimation
-  }
-
-  getCapacityPercentage(): number {
-    const capacity = this.getCapacity();
-    return Math.min(Math.round((this.talibes.length / capacity) * 100), 100);
-  }
-
-  getSpecialitiesCount(): number {
-    const specialities = new Set(this.enseignants.map(e => e.specialite).filter(Boolean));
-    return specialities.size;
-  }
-
-  getTotalChambres(): number {
-    return this.batiments.reduce((sum, b) => sum + b.nombre_chambres, 0);
+    })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (data) => {
+          this.daara.set(data.daara);
+          this.talibes.set(data.talibes);
+          this.enseignants.set(data.enseignants);
+          this.batiments.set(data.batiments.filter(b => b.daara_id === id));
+          this.loading.set(false);
+        },
+        error: () => {
+          this.showError('Erreur de chargement');
+          this.router.navigate(['/daaras']);
+          this.loading.set(false);
+        }
+      });
   }
 
   editDaara(): void {
-    this.router.navigate(['/daaras', this.daara?.id, 'edit']);
+    const id = this.daara()?.id;
+    if (id) {
+      this.router.navigate(['/daaras', id, 'edit']);
+    }
   }
 
   exportData(): void {
-    this.snackBar.open('Export en cours...', 'Fermer', { duration: 2000 });
-    // TODO: Implémenter l'export
+    this.snackBar.open('Export en cours...', 'Fermer', {
+      duration: 2000,
+      horizontalPosition: 'center',
+      verticalPosition: 'top'
+    });
   }
 
   deleteDaara(): void {
-    if (confirm(`Supprimer le daara "${this.daara?.nom}" ?\n\nCette action est irréversible.`)) {
-      this.daaraService.delete(this.daara!.id).subscribe({
-        next: () => {
-          this.snackBar.open('Daara supprimé', 'Fermer', { duration: 3000 });
-          this.router.navigate(['/daaras']);
-        },
-        error: () => {
-          this.snackBar.open('Erreur de suppression', 'Fermer', { duration: 3000 });
-        }
-      });
+    const daaraValue = this.daara();
+    if (!daaraValue) return;
+
+    if (confirm(`Supprimer le daara "${daaraValue.nom}" ?\n\nCette action est irréversible.`)) {
+      this.daaraService.delete(daaraValue.id)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: () => {
+            this.showSuccess('Daara supprimé');
+            this.router.navigate(['/daaras']);
+          },
+          error: () => {
+            this.showError('Erreur de suppression');
+          }
+        });
     }
+  }
+
+  // Méthodes utilitaires
+  private showError(message: string): void {
+    this.snackBar.open(message, 'Fermer', {
+      duration: 3000,
+      horizontalPosition: 'center',
+      verticalPosition: 'top'
+    });
+  }
+
+  private showSuccess(message: string): void {
+    this.snackBar.open(message, 'Fermer', {
+      duration: 3000,
+      horizontalPosition: 'center',
+      verticalPosition: 'top'
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 }

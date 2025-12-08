@@ -104,19 +104,10 @@ import { Enseignant } from '../../../core/models/user.model';
               </td>
             </ng-container>
 
-            <ng-container matColumnDef="grade">
-              <th mat-header-cell *matHeaderCellDef>Grade</th>
-              <td mat-cell *matCellDef="let enseignant">{{enseignant.grade || '-'}}</td>
-            </ng-container>
 
             <ng-container matColumnDef="telephone">
               <th mat-header-cell *matHeaderCellDef>Téléphone</th>
               <td mat-cell *matCellDef="let enseignant">{{enseignant.telephone || '-'}}</td>
-            </ng-container>
-
-            <ng-container matColumnDef="email">
-              <th mat-header-cell *matHeaderCellDef>email</th>
-              <td mat-cell *matCellDef="let enseignant">{{enseignant.email || '-'}}</td>
             </ng-container>
 
             <ng-container matColumnDef="actions">
@@ -361,7 +352,7 @@ export class EnseignantsListComponent implements OnInit, OnDestroy {
   skeletonItems = Array(10).fill(0);
   
   // Colonnes
-  displayedColumns = ['matricule', 'nom', 'specialite', 'grade', 'telephone', 'email', 'actions'];
+  displayedColumns = ['matricule', 'nom', 'specialite', 'telephone', 'actions'];
 
   ngOnInit(): void {
     console.log('🎯 EnseignantsListComponent initialisé');

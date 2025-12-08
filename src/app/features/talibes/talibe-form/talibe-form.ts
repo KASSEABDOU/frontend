@@ -825,6 +825,7 @@ export class TalibeFormComponent implements OnInit {
         this.isEditMode = true;
         this.talibeId = +params['id'];
         this.loadTalibe(this.talibeId);
+        this.cdRef.detectChanges(); 
       }
     });
   }

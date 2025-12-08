@@ -1,51 +1,4 @@
-
-
-// ============================================
-// 3. Mise à jour TalibeFormComponent avec upload photo
-// ============================================
-// Ajouter dans talibe-form.component.ts après l'étape Identité :
-
-/*
-// Dans les imports
-import { PhotoUploadComponent } from '../../../shared/components/photo-upload/photo-upload.component';
-
-// Dans le component
-photoUrl: string | null = null;
-
-onPhotoChanged(url: string): void {
-  this.photoUrl = url;
-}
-
-onPhotoRemoved(): void {
-  this.photoUrl = null;
-}
-
-// Dans le template, ajouter après la section Identité:
-<div class="photo-section">
-  <app-photo-upload
-    [currentPhotoUrl]="photoUrl"
-    [type]="'talibe'"
-    [altText]="identiteForm.get('prenom')?.value + ' ' + identiteForm.get('nom')?.value"
-    (photoChanged)="onPhotoChanged($event)"
-    (photoRemoved)="onPhotoRemoved()">
-  </app-photo-upload>
-</div>
-
-// Dans onSubmit(), ajouter:
-const formData = {
-  ...this.identiteForm.value,
-  ...this.parentsForm.value,
-  ...this.scolariteForm.value,
-  photo_url: this.photoUrl, // Ajouter ici
-  role: 'Talibe',
-  cours_ids: this.selectedCours.map(c => c.id)
-};
-*/
-
-// ============================================
-// 4. Page Détails Talibé - src/app/features/talibes/talibe-details/talibe-details.component.ts
-// ============================================
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, computed, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
@@ -56,13 +9,14 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { LayoutComponent } from '../../shared/components/layout/layout';
 import { TalibeService } from '../../shared/services/talibe';
 import { DaaraService } from '../../shared/services/daara';
 import { ChambreService } from '../../shared/services/chambre';
 import { Talibe, Daara, Chambre, Cours } from '../../core/models/user.model';
-import { MatTooltipModule } from '@angular/material/tooltip'; // ← AJOUTER CET IMPORT
-import { forkJoin } from 'rxjs';
+import { Subject, takeUntil, forkJoin, of } from 'rxjs';
+import { switchMap, catchError, map } from 'rxjs/operators';
 
 @Component({
   selector: 'app-talibe-details',
@@ -81,9 +35,10 @@ import { forkJoin } from 'rxjs';
     LayoutComponent,
     MatTooltipModule
   ],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-layout>
-      <div class="details-container" *ngIf="!loading && talibe">
+      <div class="details-container" *ngIf="!loading() && talibe() as talibe">
         <!-- En-tête avec photo -->
         <mat-card class="header-card">
           <div class="header-content">
@@ -98,7 +53,6 @@ import { forkJoin } from 'rxjs';
                   <mat-icon>badge</mat-icon>
                   {{talibe.matricule}}
                 </mat-chip>
-                <!-- Ajouter un chip pour indiquer si une photo est disponible -->
                 <mat-chip *ngIf="talibe.photo_profil_url" color="accent">
                   <mat-icon>photo_camera</mat-icon>
                   Photo disponible
@@ -110,15 +64,15 @@ import { forkJoin } from 'rxjs';
               <h1>{{talibe.prenom}} {{talibe.nom}}</h1>
               <p class="subtitle">
                 <mat-icon>cake</mat-icon>
-                {{calculateAge(talibe.date_naissance)}} ans • 
+                {{age()}} ans • 
                 Né le {{talibe.date_naissance | date:'dd/MM/yyyy'}}
                 <span *ngIf="talibe.lieu_naissance"> à {{talibe.lieu_naissance}}</span>
               </p>
-              <!-- 🔥 NOUVEAU : Sexe et Nationalité -->
+              
               <div class="identity-badges">
-                <mat-chip *ngIf="talibe.sexe" [color]="getSexeColor()" highlighted>
-                  <mat-icon>{{ getSexeIcon() }}</mat-icon>
-                  {{ getSexeLabel() }}
+                <mat-chip *ngIf="talibe.sexe" [color]="sexeColor()" highlighted>
+                  <mat-icon>{{ sexeIcon() }}</mat-icon>
+                  {{ sexeLabel() }}
                 </mat-chip>
                 
                 <mat-chip *ngIf="talibe.nationalite" color="primary">
@@ -134,7 +88,7 @@ import { forkJoin } from 'rxjs';
                 </div>
                 <div class="stat">
                   <mat-icon>event</mat-icon>
-                  <span> {{getYearsInDaara() }} </span>
+                  <span>{{ yearsInDaara() }}</span>
                 </div>
                 <div class="stat" *ngIf="talibe.extrait_naissance">
                   <mat-icon>check_circle</mat-icon>
@@ -218,11 +172,11 @@ import { forkJoin } from 'rxjs';
                   <mat-card-content>
                     <div class="info-item">
                       <span class="label">Nom:</span>
-                      <span class="value">{{daara?.nom || 'Non assigné'}}</span>
+                      <span class="value">{{daara()?.nom || 'Non assigné'}}</span>
                     </div>
-                    <div class="info-item" *ngIf="daara">
+                    <div class="info-item" *ngIf="daara()">
                       <span class="label">Lieu:</span>
-                      <span class="value">{{daara.lieu}}</span>
+                      <span class="value">{{daara()?.lieu}}</span>
                     </div>
                   </mat-card-content>
                 </mat-card>
@@ -238,12 +192,12 @@ import { forkJoin } from 'rxjs';
                     <div class="info-item">
                       <span class="label">Chambre:</span>
                       <span class="value">
-                        {{chambre ? 'Chambre ' + chambre.numero : 'Non assignée'}}
+                        {{chambre() ? 'Chambre ' + chambre()?.numero : 'Non assignée'}}
                       </span>
                     </div>
-                    <div class="info-item" *ngIf="chambre">
+                    <div class="info-item" *ngIf="chambre()">
                       <span class="label">Capacité:</span>
-                      <span class="value">{{chambre.nb_lits}} lits</span>
+                      <span class="value">{{chambre()?.nb_lits}} lits</span>
                     </div>
                   </mat-card-content>
                 </mat-card>
@@ -258,12 +212,12 @@ import { forkJoin } from 'rxjs';
                 <mat-card-header>
                   <mat-card-title>
                     <mat-icon>book</mat-icon>
-                    Cours suivis ({{coursTalibe.length || 0}})
+                    Cours suivis ({{coursTalibe().length || 0}})
                   </mat-card-title>
                 </mat-card-header>
                 <mat-card-content>
-                  <div class="cours-grid" *ngIf="coursTalibe && coursTalibe.length > 0">
-                    <mat-card *ngFor="let cours of coursTalibe" class="cours-card">
+                  <div class="cours-grid" *ngIf="coursTalibe() && coursTalibe().length > 0">
+                    <mat-card *ngFor="let cours of coursTalibe()" class="cours-card">
                       <mat-card-content>
                         <div class="cours-header">
                           <mat-icon>book</mat-icon>
@@ -273,7 +227,7 @@ import { forkJoin } from 'rxjs';
                       </mat-card-content>
                     </mat-card>
                   </div>
-                  <div class="no-data" *ngIf="!coursTalibe || coursTalibe.length === 0">
+                  <div class="no-data" *ngIf="!coursTalibe() || coursTalibe().length === 0">
                     <mat-icon>book_off</mat-icon>
                     <p>Aucun cours assigné</p>
                   </div>
@@ -301,7 +255,6 @@ import { forkJoin } from 'rxjs';
                         <p>{{talibe.date_entree | date:'dd/MM/yyyy'}}</p>
                       </div>
                     </div>
-                    <!-- Ajouter d'autres événements ici -->
                   </div>
                 </mat-card-content>
               </mat-card>
@@ -310,7 +263,7 @@ import { forkJoin } from 'rxjs';
         </mat-tab-group>
       </div>
 
-      <div class="loading-container" *ngIf="loading">
+      <div class="loading-container" *ngIf="loading()">
         <mat-spinner diameter="50"></mat-spinner>
         <p>Chargement des détails...</p>
       </div>
@@ -577,173 +530,57 @@ import { forkJoin } from 'rxjs';
     }
   `]
 })
-export class TalibeDetailsComponent implements OnInit {
+export class TalibeDetailsComponent implements OnInit, OnDestroy {
   private talibeService = inject(TalibeService);
   private daaraService = inject(DaaraService);
   private chambreService = inject(ChambreService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
+  private destroy$ = new Subject<void>();
 
-  talibe: Talibe | null = null;
-  daara: Daara | null = null;
-  chambre: Chambre | null = null;
-  loading = true;
-  coursTalibe: Cours [] = [];
-  defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCBmaWxsPSIjZTBlMGUwIiB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIvPjxwYXRoIGQ9Ik0xMDAgNzBjMTYuNTY5IDAgMzAgMTMuNDMxIDMwIDMwczEzLjQzMSAzMCAzMCAzMGMwIDE2LjU2OS0xMy40MzEgMzAtMzAgMzBzLTMwLTEzLjQz';
-  ngOnInit(): void {
-    this.loadTalibeDetails();
-  }
+  // Signaux pour une réactivité optimisée
+  talibe = signal<Talibe | null>(null);
+  daara = signal<Daara | null>(null);
+  chambre = signal<Chambre | null>(null);
+  coursTalibe = signal<Cours[]>([]);
+  loading = signal(true);
 
-  
+  defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj4KICAgIDxjaXJjbGUgY3g9IjUwIiBjeT0iNDAiIHI9IjI1IiBmaWxsPSIjMkU3RDMyIi8+CiAgICA8Y2lyY2xlIGN4PSI1MCIgY3k9IjkwIiByPSI0MCIgZmlsbD0iIzJFN0QzMiIvPgogICAgPGNpcmNsZSBjeD0iNTAiIGN5PSI0MCIgcj0iMjAiIGZpbGw9IiNGOUY3RjIiLz4KICAgIDxwYXRoIGQ9Ik01MCw2MCBRNzAsODAgMzAsODAiIGZpbGw9IiNGOUY3RjIiLz4KPC9zdmc+';
+// Changez pour un chemin local
 
-  loadTalibeDetails(): void {
-    const id = this.route.snapshot.paramMap.get('id');
-    if (!id) {
-      this.snackBar.open('ID du talibé non trouvé', 'Fermer', { duration: 3000 });
-      this.router.navigate(['/talibes']);
-      return;
-    }
-
-    this.loading = true;
-
-    // 🔥 Utiliser forkJoin pour charger en parallèle
-    forkJoin({
-      talibe: this.talibeService.getById(+id),
-      cours: this.talibeService.getCoursTalibes(+id) // ou this.coursService.getCoursByTalibe(+id)
-    }).subscribe({
-      next: ({ talibe, cours }) => {
-        console.log('Talibé chargé:', talibe);
-        console.log('Cours du talibé:', cours);
-        
-        this.talibe = talibe;
-        this.coursTalibe = Array.isArray(cours) ? cours : [];
-        
-        this.loadAdditionalData(talibe);
-        this.loading = false;
-      },
-      error: (error) => {
-        console.error('Erreur chargement:', error);
-        this.snackBar.open('Erreur de chargement des données', 'Fermer', { duration: 3000 });
-        this.router.navigate(['/talibes']);
-        this.loading = false;
-      }
-    });
-  }
-
-  editTalibe(): void {
-    if (this.talibe?.id) {
-      this.router.navigate(['/talibes', this.talibe.id, 'edit']);
-    } else {
-      this.snackBar.open('Impossible de modifier ce talibé', 'Fermer', { duration: 3000 });
-    }
-  }
-  
-
-  private loadAdditionalData(talibe: Talibe): void {
-    // Charger les données du daara
-    if (talibe.daara_id) {
-      this.daaraService.getById(talibe.daara_id).subscribe({
-        next: (daara) => this.daara = daara,
-        error: () => console.error('Erreur chargement daara')
-      });
-    }
-
-    // Charger les données de la chambre
-    if (talibe.chambre_id) {
-        this.chambreService.getById(talibe.chambre_id).subscribe({
-            next: (chambreData: any) => {
-                this.chambre = {
-                    id: chambreData.id,
-                    batiment_id: chambreData.batiment_id,
-                    numero: chambreData.numero,
-                    nb_lits: chambreData.nb_lits
-                    // Ajoutez d'autres propriétés si nécessaire
-                };
-                console.log('Chambre chargée:', this.chambre);
-            },
-            error: (error) => {
-                console.error('Erreur chargement chambre:', error);
-                this.chambre = null;
-            }
-        });
-    }
-  }
-
-  calculateAge(dateNaissance: string | undefined): string {
-    if (!dateNaissance) {
-        return 'N/A';
-    }
+  // Propriétés calculées
+  age = computed(() => {
+    const talibeValue = this.talibe();
+    if (!talibeValue?.date_naissance) return 'N/A';
     
     try {
-        const today = new Date();
-        const birthDate = new Date(dateNaissance);
-        
-        if (isNaN(birthDate.getTime())) {
-        return 'N/A';
-        }
-        
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const monthDiff = today.getMonth() - birthDate.getMonth();
-        
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-        }
-        
-        return age.toString();
-    } catch {
-        return 'N/A';
-    }
-    }
-
-    // 🔥 NOUVELLES MÉTHODES POUR LE SEXE
-    getSexeLabel(): string {
-      return this.talibe?.sexe === 'F' ? 'Féminin' : 'Masculin';
-    }
-
-    getSexeIcon(): string {
-      return this.talibe?.sexe === 'F' ? 'female' : 'male';
-    }
-
-    getSexeColor(): string {
-      return this.talibe?.sexe === 'F' ? 'accent' : 'primary';
-    }
-
-    getYearsInDaara(): string {
-        if (!this.talibe?.date_entree) {
-        return 'Nouveau';
-        }
-        
-        const years = this.calculateYearsSince(this.talibe.date_entree);
-        
-        if (years === 0) {
-        return 'Nouveau au daara';
-        } else if (years === 1) {
-        return '1 an au daara';
-        } else {
-        return `${years} ans au daara`;
-        }
-    }
-
-    handleImageError(event: Event): void {
-    const img = event.target as HTMLImageElement;
-    img.src = this.defaultAvatar;
-  }
-
-  // Méthode de calcul réutilisable
-  private calculateYearsSince(dateString: string | Date | undefined | null): number {
-    if (!dateString) {
-      return 0;
-    }
-
-    try {
-      const startDate = new Date(dateString);
-      const today = new Date();
+      const birthDate = new Date(talibeValue.date_naissance);
+      if (isNaN(birthDate.getTime())) return 'N/A';
       
-      if (isNaN(startDate.getTime())) {
-        return 0;
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
       }
       
+      return age.toString();
+    } catch {
+      return 'N/A';
+    }
+  });
+
+  yearsInDaara = computed(() => {
+    const talibeValue = this.talibe();
+    if (!talibeValue?.date_entree) return 'Nouveau';
+    
+    try {
+      const startDate = new Date(talibeValue.date_entree);
+      if (isNaN(startDate.getTime())) return 'Nouveau';
+      
+      const today = new Date();
       let years = today.getFullYear() - startDate.getFullYear();
       const monthDiff = today.getMonth() - startDate.getMonth();
       
@@ -751,10 +588,105 @@ export class TalibeDetailsComponent implements OnInit {
         years--;
       }
       
-      return Math.max(0, years);
-    } catch (error) {
-      console.error('Erreur calcul années:', error);
-      return 0;
+      if (years <= 0) return 'Nouveau au daara';
+      if (years === 1) return '1 an au daara';
+      return `${years} ans au daara`;
+    } catch {
+      return 'Nouveau';
+    }
+  });
+
+  sexeLabel = computed(() => {
+    const talibeValue = this.talibe();
+    return talibeValue?.sexe === 'F' ? 'Féminin' : 'Masculin';
+  });
+
+  sexeIcon = computed(() => {
+    const talibeValue = this.talibe();
+    return talibeValue?.sexe === 'F' ? 'female' : 'male';
+  });
+
+  sexeColor = computed(() => {
+    const talibeValue = this.talibe();
+    return talibeValue?.sexe === 'F' ? 'accent' : 'primary';
+  });
+
+  ngOnInit(): void {
+    this.loadTalibeDetails();
+  }
+
+  loadTalibeDetails(): void {
+    const id = this.route.snapshot.paramMap.get('id');
+    if (!id) {
+      this.showError('ID du talibé non trouvé');
+      this.router.navigate(['/talibes']);
+      return;
+    }
+
+    this.loading.set(true);
+
+    // Chargement parallèle de toutes les données
+    forkJoin({
+      talibe: this.talibeService.getById(+id),
+      cours: this.talibeService.getCoursTalibes(+id),
+      daara: this.loadDaaraIfExists(+id),
+      chambre: this.loadChambreIfExists(+id)
+    })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: ({ talibe, cours, daara, chambre }) => {
+          this.talibe.set(talibe);
+          this.coursTalibe.set(Array.isArray(cours) ? cours : []);
+          this.daara.set(daara);
+          this.chambre.set(chambre);
+          this.loading.set(false);
+        },
+        error: (error) => {
+          console.error('Erreur chargement:', error);
+          this.showError('Erreur de chargement des données');
+          this.router.navigate(['/talibes']);
+          this.loading.set(false);
+        }
+      });
+  }
+
+  private loadDaaraIfExists(talibeId: number) {
+    return this.talibeService.getById(talibeId).pipe(
+      switchMap(talibe => {
+        if (talibe?.daara_id) {
+          return this.daaraService.getById(talibe.daara_id);
+        }
+        return of(null);
+      }),
+      catchError(() => of(null))
+    );
+  }
+
+  private loadChambreIfExists(talibeId: number) {
+    return this.talibeService.getById(talibeId).pipe(
+      switchMap(talibe => {
+        if (talibe?.chambre_id) {
+          return this.chambreService.getById(talibe.chambre_id).pipe(
+            map(chambreData => ({
+              id: chambreData.id,
+              batiment_id: chambreData.batiment_id,
+              numero: chambreData.numero,
+              nb_lits: chambreData.nb_lits
+            })),
+            catchError(() => of(null))
+          );
+        }
+        return of(null);
+      })
+    );
+  }
+
+  editTalibe(): void {
+    const id = this.talibe()?.id;
+    if (id) {
+      this.router.navigate(['/talibes', id, 'edit']);
+    } else {
+      this.showError('Impossible de modifier ce talibé');
     }
   }
 
@@ -763,18 +695,48 @@ export class TalibeDetailsComponent implements OnInit {
   }
 
   deleteTalibe(): void {
-    if (!this.talibe) return;
+    const talibeValue = this.talibe();
+    if (!talibeValue) return;
 
-    if (confirm(`Supprimer définitivement ${this.talibe.prenom} ${this.talibe.nom} ?`)) {
-      this.talibeService.delete(this.talibe.id).subscribe({
-        next: () => {
-          this.snackBar.open('Talibé supprimé avec succès', 'Fermer', { duration: 3000 });
-          this.router.navigate(['/talibes']);
-        },
-        error: () => {
-          this.snackBar.open('Erreur lors de la suppression', 'Fermer', { duration: 3000 });
-        }
-      });
+    if (confirm(`Supprimer définitivement ${talibeValue.prenom} ${talibeValue.nom} ?`)) {
+      this.talibeService.delete(talibeValue.id)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: () => {
+            this.showSuccess('Talibé supprimé avec succès');
+            this.router.navigate(['/talibes']);
+          },
+          error: () => {
+            this.showError('Erreur lors de la suppression');
+          }
+        });
     }
+  }
+
+  handleImageError(event: Event): void {
+    const img = event.target as HTMLImageElement;
+    img.src = this.defaultAvatar;
+  }
+
+  // Méthodes utilitaires
+  private showError(message: string): void {
+    this.snackBar.open(message, 'Fermer', {
+      duration: 3000,
+      horizontalPosition: 'center',
+      verticalPosition: 'top'
+    });
+  }
+
+  private showSuccess(message: string): void {
+    this.snackBar.open(message, 'Fermer', {
+      duration: 3000,
+      horizontalPosition: 'center',
+      verticalPosition: 'top'
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 }

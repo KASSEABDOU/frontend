@@ -1,5 +1,5 @@
 // ============================================
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject,ChangeDetectionStrategy, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
@@ -15,6 +15,8 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { LayoutComponent } from '../../shared/components/layout/layout';
 import { EnseignantService } from '../../shared/services/enseignant';
 import { Enseignant, Cours, Talibe } from '../../core/models/user.model';
+import { Subject, takeUntil } from 'rxjs';
+
 
 @Component({
   selector: 'app-enseignant-details',
@@ -34,9 +36,10 @@ import { Enseignant, Cours, Talibe } from '../../core/models/user.model';
     MatProgressBarModule,
     LayoutComponent
   ],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-layout>
-      <div class="details-container" *ngIf="!loading && enseignant">
+      <div class="details-container" *ngIf="!loading() && enseignant() as enseignant">
         <!-- En-tête -->
         <mat-card class="header-card">
           <div class="header-content">
@@ -51,7 +54,7 @@ import { Enseignant, Cours, Talibe } from '../../core/models/user.model';
                   <mat-chip color="primary" highlighted>
                     {{enseignant.matricule}}
                   </mat-chip>
-                  <mat-chip [color]="getGradeColor()">
+                  <mat-chip [color]="gradeColor()">
                     {{enseignant.grade || 'Enseignant'}}
                   </mat-chip>
                   <mat-chip *ngIf="isActive" color="accent">
@@ -64,11 +67,11 @@ import { Enseignant, Cours, Talibe } from '../../core/models/user.model';
               <div class="quick-stats">
                 <div class="stat">
                   <mat-icon>school</mat-icon>
-                  <span>{{cours.length}} cours assignés</span>
+                  <span>{{cours().length}} cours assignés</span>
                 </div>
-                <div *ngFor="let c of cours" class="stat">
+                <div *ngIf="totalTalibes() > 0" class="stat">
                   <mat-icon>groups</mat-icon>
-                  <span>{{c.nombre_talibes}} talibés</span>
+                  <span>{{totalTalibes()}} talibés</span>
                 </div>
                 <div class="stat" *ngIf="enseignant.specialite">
                   <mat-icon>menu_book</mat-icon>
@@ -85,10 +88,6 @@ import { Enseignant, Cours, Talibe } from '../../core/models/user.model';
                   <mat-icon>edit</mat-icon>
                   Modifier
                 </button>
-                <!---<button mat-raised-button color="primary" (click)="assignerCours()">
-                    <mat-icon>add_circle</mat-icon>
-                    Assigner un cours
-                  </button>-->
                 <button mat-raised-button (click)="exportData()">
                   <mat-icon>file_download</mat-icon>
                   Exporter
@@ -108,7 +107,7 @@ import { Enseignant, Cours, Talibe } from '../../core/models/user.model';
             <mat-card-content>
               <mat-icon>school</mat-icon>
               <div class="stat-info">
-                <h2>{{cours.length}}</h2>
+                <h2>{{cours().length}}</h2>
                 <p>Cours assignés</p>
                 <small>Charge d'enseignement</small>
               </div>
@@ -119,7 +118,7 @@ import { Enseignant, Cours, Talibe } from '../../core/models/user.model';
             <mat-card-content>
               <mat-icon>groups</mat-icon>
               <div class="stat-info">
-                <h2>{{getTotalTalibes()}}</h2>
+                <h2>{{totalTalibes()}}</h2>
                 <p>Talibés encadrés</p>
                 <small>Tous cours confondus</small>
               </div>
@@ -130,10 +129,10 @@ import { Enseignant, Cours, Talibe } from '../../core/models/user.model';
             <mat-card-content>
               <mat-icon>work</mat-icon>
               <div class="stat-info">
-                <h2>{{getExperience()}}</h2>
+                <h2>{{experience()}}</h2>
                 <p>Années d'expérience</p>
-                <small *ngIf="enseignant.nb_annees">
-                  Depuis {{enseignant.nb_annees | date:'yyyy'}}
+                <small *ngIf="enseignant.date_recrutement">
+                  Depuis {{enseignant.date_recrutement | date:'yyyy'}}
                 </small>
               </div>
             </mat-card-content>
@@ -143,11 +142,11 @@ import { Enseignant, Cours, Talibe } from '../../core/models/user.model';
             <mat-card-content>
               <mat-icon>star</mat-icon>
               <div class="stat-info">
-                <h2>{{getPerformance()}}/5</h2>
+                <h2>{{performance()}}/5</h2>
                 <p>Évaluation</p>
                 <mat-chip-set>
-                  <mat-chip [color]="getPerformanceColor()">
-                    {{getPerformanceLabel()}}
+                  <mat-chip [color]="performanceColor()">
+                    {{performanceLabel()}}
                   </mat-chip>
                 </mat-chip-set>
               </div>
@@ -295,16 +294,12 @@ import { Enseignant, Cours, Talibe } from '../../core/models/user.model';
                 <mat-card-header>
                   <mat-card-title>
                     <mat-icon>school</mat-icon>
-                    Liste des cours ({{cours.length}})
+                    Liste des cours ({{cours().length}})
                   </mat-card-title>
-                  <!---<button mat-raised-button color="primary" (click)="assignerCours()">
-                    <mat-icon>add_circle</mat-icon>
-                    Assigner un cours
-                  </button>-->
                 </mat-card-header>
                 <mat-card-content>
-                  <div class="cours-grid" *ngIf="cours.length > 0">
-                    <mat-card *ngFor="let c of cours" class="cours-card">
+                  <div class="cours-grid" *ngIf="cours().length > 0">
+                    <mat-card *ngFor="let c of cours()" class="cours-card">
                       <mat-card-content>
                         <div class="cours-header">
                           <mat-icon>{{getCoursIcon(c.code)}}</mat-icon>
@@ -339,7 +334,7 @@ import { Enseignant, Cours, Talibe } from '../../core/models/user.model';
                     </mat-card>
                   </div>
 
-                  <div class="no-data" *ngIf="cours.length === 0">
+                  <div class="no-data" *ngIf="cours().length === 0">
                     <mat-icon>school_off</mat-icon>
                     <p>Aucun cours assigné à cet enseignant</p>
                   </div>
@@ -355,11 +350,11 @@ import { Enseignant, Cours, Talibe } from '../../core/models/user.model';
                 <mat-card-header>
                   <mat-card-title>
                     <mat-icon>groups</mat-icon>
-                    Liste des talibés ({{getTotalTalibes()}})
+                    Liste des talibés ({{totalTalibes()}})
                   </mat-card-title>
                 </mat-card-header>
                 <mat-card-content>
-                  <table mat-table [dataSource]="getAllTalibes()" *ngIf="getAllTalibes().length > 0">
+                  <table mat-table [dataSource]="allTalibes()" *ngIf="allTalibes().length > 0">
                     <ng-container matColumnDef="matricule">
                       <th mat-header-cell *matHeaderCellDef>Matricule</th>
                       <td mat-cell *matCellDef="let talibe">{{talibe.matricule}}</td>
@@ -399,7 +394,7 @@ import { Enseignant, Cours, Talibe } from '../../core/models/user.model';
                     <tr mat-row *matRowDef="let row; columns: talibesColumns;"></tr>
                   </table>
 
-                  <div class="no-data" *ngIf="getAllTalibes().length === 0">
+                  <div class="no-data" *ngIf="allTalibes().length === 0">
                     <mat-icon>person_off</mat-icon>
                     <p>Aucun talibé encadré</p>
                   </div>
@@ -408,55 +403,6 @@ import { Enseignant, Cours, Talibe } from '../../core/models/user.model';
             </div>
           </mat-tab>
 
-          <!-- Onglet Emploi du temps -->
-          <mat-tab label="Emploi du temps">
-            <div class="tab-content">
-              <mat-card>
-                <mat-card-header>
-                  <mat-card-title>
-                    <mat-icon>calendar_today</mat-icon>
-                    Emploi du temps hebdomadaire
-                  </mat-card-title>
-                </mat-card-header>
-                <mat-card-content>
-                  <div class="schedule-summary">
-                    <div class="summary-item">
-                      <mat-icon>schedule</mat-icon>
-                      <div>
-                        <strong>{{getChargeHoraire()}}h</strong>
-                        <p>Charge hebdomadaire</p>
-                      </div>
-                    </div>
-                    <div class="summary-item">
-                      <mat-icon>school</mat-icon>
-                      <div>
-                        <strong>{{cours.length}}</strong>
-                        <p>Cours différents</p>
-                      </div>
-                    </div>
-                    <div class="summary-item">
-                      <mat-icon>groups</mat-icon>
-                      <div *ngFor="let c of cours">
-                        <strong>{{c.nombre_talibes}}</strong>
-                        <p>Talibés au total</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <mat-divider class="my-4"></mat-divider>
-
-                  <div class="schedule-placeholder">
-                    <mat-icon>event_note</mat-icon>
-                    <p>L'emploi du temps détaillé sera disponible prochainement</p>
-                    <button mat-raised-button color="primary">
-                      <mat-icon>add</mat-icon>
-                      Définir l'emploi du temps
-                    </button>
-                  </div>
-                </mat-card-content>
-              </mat-card>
-            </div>
-          </mat-tab>
         </mat-tab-group>
       </div>
 
@@ -871,102 +817,70 @@ export class EnseignantDetailsComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
+  private destroy$ = new Subject<void>();
 
-  enseignant: Enseignant | null = null;
-  cours: Cours[] = [];
-  loading = true;
+  // Utilisation de signals pour une réactivité plus performante
+  enseignant = signal<Enseignant | null>(null);
+  cours = signal<Cours[]>([]);
+  loading = signal(true);
   isActive = true;
   
   talibesColumns = ['matricule', 'nom', 'cours', 'niveau', 'actions'];
 
-  ngOnInit(): void {
-    this.route.params.subscribe(params => {
-      const id = +params['id'];
-      this.loadEnseignantDetails(id);
-    });
-  }
+  // Propriétés calculées (avec cache)
+  totalTalibes = computed(() => {
+    return this.cours().reduce((total, c) => total + (c.nombre_talibes || 0), 0);
+  });
 
-  loadEnseignantDetails(id: number): void {
-    this.enseignantService.getById(id).subscribe({
-      next: (enseignant) => {
-        this.enseignant = enseignant;
-        this.loadCours(id);
-      },
-      error: () => {
-        this.snackBar.open('Erreur de chargement', 'Fermer',
-           { duration: 3000 ,
-             horizontalPosition: 'center',
-             verticalPosition: 'top'
-           });
-        this.router.navigate(['/enseignants']);
-      }
-    });
-  }
+  chargeHoraire = computed(() => {
+    return this.cours().reduce((total, c) => total + (c.duree || 0), 0);
+  });
 
-  loadCours(enseignantId: number): void {
-    this.enseignantService.getCours(enseignantId).subscribe({
-      next: (cours) => {
-        this.cours = cours;
-        this.loading = false;
-      }
-    });
-  }
+  experience = computed(() => {
+    const enseignant = this.enseignant();
+    if (!enseignant?.date_recrutement) return 0;
+    const dateRecrutement = new Date(enseignant.date_recrutement);
+    const today = new Date();
+    return today.getFullYear() - dateRecrutement.getFullYear();
+  });
 
-  getGradeColor(): string {
-    const grade = this.enseignant?.grade?.toLowerCase() || '';
+  performance = computed(() => {
+    // Simulation - À remplacer par vraie logique d'évaluation
+    const total = this.totalTalibes();
+    if (total > 100) return 5;
+    if (total > 50) return 4.5;
+    if (total > 20) return 4;
+    if (total > 10) return 3.5;
+    return 3;
+  });
+
+  gradeColor = computed(() => {
+    const grade = this.enseignant()?.grade?.toLowerCase() || '';
     if (grade.includes('titulaire') || grade.includes('certifié')) return 'accent';
     if (grade.includes('agrégé') || grade.includes('principal')) return 'warn';
     return 'primary';
-  }
+  });
 
-  getTotalTalibes(): number {
-    return this.cours.reduce((total, c) => total + ( 0), 0);
-  }
-
-  getExperience(): number {
-    if (!this.enseignant?.date_recrutement) return 0;
-    const dateRecrutement = new Date(this.enseignant.date_recrutement);
-    const today = new Date();
-    return today.getFullYear() - dateRecrutement.getFullYear();
-  }
-
-  getChargeHoraire(): number {
-    return this.cours.reduce((total, c) => total + (c.duree || 0), 0);
-  }
-
-  getPerformance(): number {
-    // Simulation - À remplacer par vraie logique d'évaluation
-    return 4.5;
-  }
-
-  getPerformanceColor(): string {
-    const perf = this.getPerformance();
+  performanceColor = computed(() => {
+    const perf = this.performance();
     if (perf >= 4.5) return 'accent';
     if (perf >= 3.5) return 'primary';
     return 'warn';
-  }
+  });
 
-  getPerformanceLabel(): string {
-    const perf = this.getPerformance();
+  performanceLabel = computed(() => {
+    const perf = this.performance();
     if (perf >= 4.5) return 'Excellent';
     if (perf >= 3.5) return 'Bon';
     if (perf >= 2.5) return 'Moyen';
     return 'À améliorer';
-  }
+  });
 
-  getCoursIcon(code: string): string {
-    if (code.startsWith('COR')) return 'menu_book';
-    if (code.startsWith('HAD')) return 'history_edu';
-    if (code.startsWith('FIQ')) return 'gavel';
-    if (code.startsWith('TAF')) return 'auto_stories';
-    if (code.startsWith('ARA')) return 'translate';
-    return 'book';
-  }
-
-  getAllTalibes(): any[] {
-    // Combine tous les talibés de tous les cours
+  allTalibes = computed(() => {
+    const coursList = this.cours();
     const allTalibes: any[] = [];
-    this.cours.forEach(c => {
+    
+    coursList.forEach(c => {
       if (c.talibes) {
         c.talibes.forEach(t => {
           allTalibes.push({
@@ -977,54 +891,162 @@ export class EnseignantDetailsComponent implements OnInit {
       }
     });
     return allTalibes;
+  });
+
+  ngOnInit(): void {
+    this.route.params
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(params => {
+        const id = +params['id'];
+        this.loadEnseignantDetails(id);
+      });
+  }
+
+  loadEnseignantDetails(id: number): void {
+    this.loading.set(true);
+    
+    this.enseignantService.getById(id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (enseignant) => {
+          this.enseignant.set(enseignant);
+          this.loadCours(id);
+        },
+        error: () => {
+          this.showError('Erreur de chargement');
+          this.router.navigate(['/enseignants']);
+        }
+      });
+  }
+
+  loadCours(enseignantId: number): void {
+    this.enseignantService.getCours(enseignantId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (cours) => {
+          this.cours.set(cours);
+          this.loading.set(false);
+        },
+        error: () => {
+          this.loading.set(false);
+          this.showError('Erreur de chargement des cours');
+        }
+      });
+  }
+
+  // Fonction utilitaire simplifiée pour le template
+  getCoursIcon(code: string): string {
+    if (!code) return 'book';
+    
+    const firstChar = code.charAt(0);
+    switch(firstChar) {
+      case 'C': return 'menu_book';
+      case 'H': return 'history_edu';
+      case 'F': return 'gavel';
+      case 'T': return 'auto_stories';
+      case 'A': return 'translate';
+      default: return 'book';
+    }
   }
 
   editEnseignant(): void {
-    this.router.navigate(['/enseignants', this.enseignant?.id, 'edit']);
+    const id = this.enseignant()?.id;
+    if (id) {
+      this.router.navigate(['/enseignants', id, 'edit']);
+    }
   }
 
   assignerCours(): void {
-    this.router.navigate(['/enseignants', this.enseignant?.id, 'cours']);
+    const id = this.enseignant()?.id;
+    if (id) {
+      this.router.navigate(['/enseignants', id, 'cours']);
+    }
   }
 
   exportData(): void {
-    this.snackBar.open('Export en cours...', 'Fermer', 
-      { duration: 2000,
-         horizontalPosition: 'center',
-         verticalPosition: 'top'
-
-       });
+    this.snackBar.open('Export en cours...', 'Fermer', {
+      duration: 2000,
+      horizontalPosition: 'center',
+      verticalPosition: 'top'
+    });
   }
 
   deleteEnseignant(): void {
-    if (confirm(`Supprimer l'enseignant "${this.enseignant?.prenom} ${this.enseignant?.nom}" ?`)) {
-      this.enseignantService.delete(this.enseignant!.id).subscribe({
-        next: () => {
-          this.snackBar.open('Enseignant supprimé', 'Fermer', 
-            { duration: 3000 ,
-               horizontalPosition: 'center',
-               verticalPosition: 'top'
-            });
-          this.router.navigate(['/enseignants']);
-        },
-        error: () => {
-          this.snackBar.open('Erreur de suppression', 'Fermer', { duration: 3000 });
-        }
-      });
+    const enseignant = this.enseignant();
+    if (!enseignant) return;
+
+    if (confirm(`Supprimer l'enseignant "${enseignant.prenom} ${enseignant.nom}" ?`)) {
+      this.enseignantService.delete(enseignant.id)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: () => {
+            this.showSuccess('Enseignant supprimé');
+            this.router.navigate(['/enseignants']);
+          },
+          error: () => {
+            this.showError('Erreur de suppression');
+          }
+        });
     }
   }
 
   retirerCours(coursId: number): void {
+    const enseignantId = this.enseignant()?.id;
+    if (!enseignantId) return;
+
     if (confirm('Retirer cet enseignant de ce cours ?')) {
-      this.enseignantService.retirerCours(this.enseignant!.id, coursId).subscribe({
-        next: () => {
-          this.snackBar.open('Cours retiré', 'Fermer', { duration: 2000 });
-          this.loadCours(this.enseignant!.id);
-        },
-        error: () => {
-          this.snackBar.open('Erreur lors du retrait', 'Fermer', { duration: 3000 });
-        }
-      });
+      this.enseignantService.retirerCours(enseignantId, coursId)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: () => {
+            this.showSuccess('Cours retiré');
+            this.loadCours(enseignantId);
+          },
+          error: () => {
+            this.showError('Erreur lors du retrait');
+          }
+        });
     }
   }
+
+  // Fonctions utilitaires pour les notifications
+  private showError(message: string): void {
+    this.snackBar.open(message, 'Fermer', {
+      duration: 3000,
+      horizontalPosition: 'center',
+      verticalPosition: 'top',
+      panelClass: ['error-snackbar']
+    });
+  }
+
+  private showSuccess(message: string): void {
+    this.snackBar.open(message, 'Fermer', {
+      duration: 3000,
+      horizontalPosition: 'center',
+      verticalPosition: 'top',
+      panelClass: ['success-snackbar']
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+   getPerformance(): number {
+    // Simulation - À remplacer par vraie logique d'évaluation
+    return 4.5;
+  }
+
+  getChargeHoraire(): number {
+    return 0;
+  }
+
+  getExperience(): number {
+    
+    const today = new Date();
+    return today.getFullYear() ;
+  }
+
+  
+  
 }
