@@ -45,7 +45,7 @@ import { forkJoin } from 'rxjs';
           <div class="header-left">
             <h1>
               <mat-icon class="title-icon">apartment</mat-icon>
-              Gestion des Bâtiments & Chambres
+              Gestion des Bâtiments
             </h1>
             <p class="subtitle">
               {{batiments.length}} bâtiment(s) • {{getTotalChambres()}} chambre(s)
@@ -102,12 +102,6 @@ import { forkJoin } from 'rxjs';
               <div class="panel-content">
                 <!-- Actions du bâtiment -->
                 <div class="batiment-actions">
-                  <button mat-raised-button color="primary" 
-                          (click)="createChambre(batiment.id); $event.stopPropagation()"
-                          matTooltip="Ajouter une chambre">
-                    <mat-icon>add</mat-icon>
-                    Ajouter chambre
-                  </button>
                   <button mat-raised-button color="accent" 
                           (click)="editBatiment(batiment.id); $event.stopPropagation()"
                           matTooltip="Modifier le bâtiment">
