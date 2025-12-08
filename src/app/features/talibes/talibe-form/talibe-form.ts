@@ -292,41 +292,6 @@ import { PhotoUploadComponent } from '../../uploade/uploade';
                       </mat-form-field>
                     </div>
 
-                    <mat-form-field appearance="outline" class="full-width">
-                      <mat-label>Chambre</mat-label>
-                      <mat-select formControlName="chambre_id" [disabled]="!chambresFiltered.length">
-                        <mat-option *ngFor="let chambre of chambresFiltered" [value]="chambre.id">
-                          Chambre {{chambre.numero}} ({{chambre.nb_lits}} lits)
-                        </mat-option>
-                      </mat-select>
-                      <mat-icon matPrefix>meeting_room</mat-icon>
-                      <mat-hint *ngIf="!chambresFiltered.length">Sélectionnez d'abord un daara</mat-hint>
-                    </mat-form-field>
-
-                    <div class="cours-section">
-                      <label class="section-label">
-                        <mat-icon>book</mat-icon>
-                        Cours suivis
-                      </label>
-                      <mat-chip-set>
-                        <mat-chip *ngFor="let cours of selectedCours" 
-                                  (removed)="removeCours(cours)"
-                                  [removable]="true">
-                          {{cours.libelle}}
-                          <mat-icon matChipRemove>cancel</mat-icon>
-                        </mat-chip>
-                      </mat-chip-set>
-                      <mat-form-field appearance="outline" class="full-width">
-                        <mat-label>Ajouter des cours</mat-label>
-                        <mat-select (selectionChange)="addCours($event.value)" [value]="null">
-                          <mat-option *ngFor="let cours of availableCours" [value]="cours">
-                            {{cours.code}} - {{cours.libelle}}
-                          </mat-option>
-                        </mat-select>
-                        <mat-icon matPrefix>add</mat-icon>
-                      </mat-form-field>
-                    </div>
-
                     <div class="step-actions">
                       <button mat-button matStepperPrevious>
                         <mat-icon>arrow_back</mat-icon>
@@ -945,7 +910,6 @@ export class TalibeFormComponent implements OnInit {
       ...this.scolariteForm.value,
       photo_profil: photoFileName,
       role: 'TALIBE',
-      cours_ids: this.selectedCours.map(c => c.id),
       date_naissance: this.formatDateForBackend(this.identiteForm.value.date_naissance),
       // Inclure la photo dans les données
       //photo_url: this.photoUrl
