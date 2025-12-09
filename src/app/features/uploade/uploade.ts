@@ -7,6 +7,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { UploadService } from '../../shared/services/uploade';
 import { MatTooltipModule } from '@angular/material/tooltip'; // ← AJOUTER CET IMPORT
 
+
 @Component({
   selector: 'app-photo-upload',
   standalone: true,
@@ -148,6 +149,7 @@ export class PhotoUploadComponent {
   @Input() altText = 'Photo';
   @Output() photoChanged = new EventEmitter<string>();
   @Output() photoRemoved = new EventEmitter<void>();
+  @Output() pulbic_id = new EventEmitter<string>();
 
   private uploadService = inject(UploadService);
   private snackBar = inject(MatSnackBar);
@@ -183,7 +185,7 @@ export class PhotoUploadComponent {
           console.log('Type réponse:', typeof response);
           console.log('Réponse brute:', response);
           console.log('URL:', response?.url);
-          console.log('Filename:', response?.filename);
+          console.log('Filename:', response?.public_id);
           console.log('========================');
           
           if (!response?.url) {
@@ -203,6 +205,7 @@ export class PhotoUploadComponent {
           
           // Envoyer le filename seulement au formulaire
           this.photoChanged.emit(response.url);
+          this.pulbic_id.emit(response.public_id)
           
           this.snackBar.open('Photo uploadée avec succès !', 'Fermer', { duration: 3000 });
           this.uploading = false;

@@ -24,6 +24,8 @@ import { ChambreService } from '../../../shared/services/chambre';
 import { CoursService } from '../../../shared/services/cours';
 import { Daara, Chambre, Cours } from '../../../core/models/user.model';
 import { PhotoUploadComponent } from '../../uploade/uploade';
+import { ViewChild, AfterViewInit } from '@angular/core';
+
 
 @Component({
   selector: 'app-talibe-form',
@@ -713,7 +715,7 @@ import { PhotoUploadComponent } from '../../uploade/uploade';
     }
   `]
 })
-export class TalibeFormComponent implements OnInit {
+export class TalibeFormComponent implements OnInit, AfterViewInit {
   private fb = inject(FormBuilder);
   private talibeService = inject(TalibeService);
   private daaraService = inject(DaaraService);
@@ -742,6 +744,8 @@ export class TalibeFormComponent implements OnInit {
 
   // Propriété pour la photo
   photoUrl: string | null = null;
+  public_id: string | null = null;
+  @ViewChild(PhotoUploadComponent) uploadPhoto!: PhotoUploadComponent;
 
   constructor() {
     this.identiteForm = this.fb.group({
@@ -754,7 +758,8 @@ export class TalibeFormComponent implements OnInit {
       sexe:[''],
       adresse: [''],
       nationalite:[''],
-      extrait_naissance: [false]
+      extrait_naissance: [false],
+      photo_profil: ['']
     });
 
     this.parentsForm = this.fb.group({
@@ -900,20 +905,22 @@ export class TalibeFormComponent implements OnInit {
     if (!this.isFormValid()) return;
 
     this.isSubmitting = true;
-    const photoFileName = this.photoUrl ? this.extractFileName(this.photoUrl) : null;
     const uniqueMatricule = this.generateUniqueMatricule();
-    this.identiteForm.patchValue({ matricule: uniqueMatricule });
+    this.identiteForm.patchValue({
+       matricule: uniqueMatricule ,
+       photo_profil: this.public_id
+    });
     
     const formData = {
       ...this.identiteForm.value,
       ...this.parentsForm.value,
       ...this.scolariteForm.value,
-      photo_profil: photoFileName,
       role: 'TALIBE',
       date_naissance: this.formatDateForBackend(this.identiteForm.value.date_naissance),
       // Inclure la photo dans les données
       //photo_url: this.photoUrl
     };
+     console.log(formData);
 
     if (!this.isEditMode) {
       Object.assign(formData, this.securityForm.value);
@@ -973,5 +980,14 @@ export class TalibeFormComponent implements OnInit {
     } catch {
       return 'Date invalide';
     }
+  }
+  ngAfterViewInit() {
+    // IMPORTANT : écouter l’EventEmitter de l’enfant
+    this.uploadPhoto.pulbic_id.subscribe((id: string) => {
+      console.log("PUBLIC ID reçu :", id);
+
+      // Stocker dans ton formulaire
+      this.public_id = id 
+    });
   }
 }

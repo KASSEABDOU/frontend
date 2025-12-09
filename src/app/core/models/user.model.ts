@@ -13,7 +13,7 @@ export interface User {
   nombre_annees?: number;
   daara_id?: number;
   photo_url?: string;  // Nouveau
-  photo_profil_url?: string;
+  photo_profil?: string;
   sexe?: string;
   nationalite?:string;
 }

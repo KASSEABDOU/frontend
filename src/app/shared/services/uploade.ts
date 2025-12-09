@@ -5,7 +5,7 @@ import { environment } from '../../../environments/environment';
 
 export interface UploadResponse {
   url: string;
-  filename: string;
+  public_id: string;
   size: number;
 }
 

@@ -44,7 +44,7 @@ import { switchMap, catchError, map } from 'rxjs/operators';
           <div class="header-content">
             <div class="photo-section">
               <div class="photo-wrapper">
-                <img [src]="talibe.photo_profil_url || defaultAvatar" 
+                <img [src]="talibe.photo_profil || defaultAvatar" 
                     [alt]="talibe.prenom + ' ' + talibe.nom"
                     (error)="handleImageError($event)">
               </div>
@@ -52,10 +52,6 @@ import { switchMap, catchError, map } from 'rxjs/operators';
                 <mat-chip color="primary" highlighted>
                   <mat-icon>badge</mat-icon>
                   {{talibe.matricule}}
-                </mat-chip>
-                <mat-chip *ngIf="talibe.photo_profil_url" color="accent">
-                  <mat-icon>photo_camera</mat-icon>
-                  Photo disponible
                 </mat-chip>
               </mat-chip-set>
             </div>
@@ -640,6 +636,7 @@ export class TalibeDetailsComponent implements OnInit, OnDestroy {
           this.daara.set(daara);
           this.chambre.set(chambre);
           this.loading.set(false);
+          console.log(talibe);
         },
         error: (error) => {
           console.error('Erreur chargement:', error);
